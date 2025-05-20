@@ -15,27 +15,34 @@ uploaded_file = st.file_uploader("Subí el archivo Excel del casino", type=[".xl
 if uploaded_file:
     # Leer Excel
     df = pd.read_excel(uploaded_file)
-    
+
     # Normalizar nombres de columnas
     df.columns = df.columns.str.lower().str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
-    
-    # Extraer hora desde columna ID
+
+    # Extraer fecha y hora desde columna ID
     if 'id' not in df.columns:
         st.error("No se encontró una columna llamada 'ID'")
     else:
-        def extraer_hora(valor):
+        def procesar_id(valor):
             try:
-                match = re.search(r"-([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})-([0-9]{1,2})$", valor)
-                if match:
-                    return f"{match.group(1)}-{int(match.group(2)):02}-{int(match.group(3)):02} {int(match.group(4)):02}:00"
+                partes = valor.split('-')
+                if len(partes) >= 5:
+                    anio = partes[-4]
+                    mes = int(partes[-3])
+                    dia = int(partes[-2])
+                    hora = int(partes[-1])
+                    fecha = f"{anio}-{mes:02}-{dia:02}"
+                    return fecha, hora
             except:
-                return None
+                return None, None
 
-        df['hora'] = df['id'].astype(str).apply(extraer_hora)
-        df = df.dropna(subset=['hora'])
-        df['hora'] = pd.to_datetime(df['hora'], format="%Y-%m-%d %H:%M")
+        df[['fecha', 'hora']] = df['id'].astype(str).apply(lambda x: pd.Series(procesar_id(x)))
+        df = df.dropna(subset=['fecha', 'hora'])
 
-        # Detectar columnas de apuestas
+        # Crear datetime combinando fecha + hora
+        df['fecha_hora'] = pd.to_datetime(df['fecha'] + ' ' + df['hora'].astype(int).astype(str) + ":00", format="%Y-%m-%d %H:%M")
+
+        # Detectar columnas de apuestas y montos
         columnas_apuestas = [col for col in df.columns if 'numero de apuestas' in col]
         columnas_montos = [col for col in df.columns if col.startswith('monto apostado')]
 
@@ -46,7 +53,7 @@ if uploaded_file:
             df['cantidad_apuestas'] = df[columnas_apuestas].sum(axis=1)
             df['monto_apostado'] = df[columnas_montos].sum(axis=1) if columnas_montos else 0
 
-            resumen = df.groupby('hora').agg({
+            resumen = df.groupby('fecha_hora').agg({
                 'cantidad_apuestas': 'sum',
                 'monto_apostado': 'sum'
             }).reset_index()
@@ -54,7 +61,7 @@ if uploaded_file:
             # Gráfico de cantidad de apuestas
             st.subheader("Cantidad total de apuestas por hora")
             fig1, ax1 = plt.subplots(figsize=(12, 5))
-            sns.lineplot(data=resumen, x='hora', y='cantidad_apuestas', ax=ax1)
+            sns.lineplot(data=resumen, x='fecha_hora', y='cantidad_apuestas', ax=ax1)
             ax1.set_title("Apuestas por hora")
             ax1.set_xlabel("Hora")
             ax1.set_ylabel("Cantidad de apuestas")
@@ -63,7 +70,7 @@ if uploaded_file:
             # Gráfico de monto apostado
             st.subheader("Monto total apostado por hora")
             fig2, ax2 = plt.subplots(figsize=(12, 5))
-            sns.lineplot(data=resumen, x='hora', y='monto_apostado', ax=ax2)
+            sns.lineplot(data=resumen, x='fecha_hora', y='monto_apostado', ax=ax2)
             ax2.set_title("Montos apostados por hora")
             ax2.set_xlabel("Hora")
             ax2.set_ylabel("Monto apostado")
