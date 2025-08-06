@@ -79,4 +79,13 @@ if uploaded_file:
         st.dataframe(ranking_dia.style.format({
             'Cantidad de apuestas':'{:,}',
             'Importe apostado':'${:,.2f}'
+         # Top 5 horas con más y menos apuestas
+            mejores = resumen.sort_values('cantidad_apuestas', ascending=False).head(5)
+            peores = resumen.sort_values('cantidad_apuestas').head(5)
+
+            st.subheader("Top 5 horas con más apuestas")
+            st.dataframe(mejores)
+
+            st.subheader("Top 5 horas con menos apuestas")
+            st.dataframe(peores)
         }))
